@@ -63,19 +63,19 @@ export default function ContractorResults() {
   const formatCurrency = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
   return (
-    <div className="bg-cream min-h-screen">
+    <div className="bg-dark min-h-screen">
       {/* Results Header */}
-      <div className="bg-white border-b border-border">
+      <div className="bg-[#111318] border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="font-headline font-bold text-2xl md:text-3xl mb-2">
+          <h1 className="font-headline font-bold text-2xl md:text-3xl mb-2 text-white">
             Your Top Contractors for <span className="capitalize">{project.project_type}</span> Remodel
           </h1>
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+          <div className="flex flex-wrap gap-4 text-sm text-neutral-400">
             <span>Zip: {project.zip_code}</span>
             <span>|</span>
             <span>Scope: {(project.scope as Record<string, string>).level}</span>
             <span>|</span>
-            <span className="font-medium text-foreground">
+            <span className="font-medium text-white">
               Est. {formatCurrency(project.cost_estimate_low!)} - {formatCurrency(project.cost_estimate_high!)}
             </span>
           </div>
@@ -83,10 +83,10 @@ export default function ContractorResults() {
       </div>
 
       {/* Trust Banner */}
-      <div className="bg-green-50 border-b border-green-100">
+      <div className="bg-green-500/10 border-b border-green-500/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-2">
-          <Shield className="w-4 h-4 text-green-600" />
-          <span className="text-sm text-green-700">
+          <Shield className="w-4 h-4 text-green-400" />
+          <span className="text-sm text-green-300">
             We don't sell your data. Contact contractors directly — they won't know you came from us.
           </span>
         </div>
@@ -97,19 +97,19 @@ export default function ContractorResults() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-4">
             {contractors.map((contractor, idx) => (
-              <Card key={contractor.id} className="hover:shadow-md transition-shadow">
+              <Card key={contractor.id} className="hover:border-primary/30 transition-all">
                 <CardContent>
                   <div className="flex gap-4">
                     <div className="flex flex-col items-center gap-1">
-                      <span className="text-xs text-muted-foreground font-medium">#{idx + 1}</span>
+                      <span className="text-xs text-neutral-400 font-medium">#{idx + 1}</span>
                       <ScoreBadge score={contractor.composite_score} size="md" />
                     </div>
                     <div className="flex-1">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h3 className="font-headline font-bold text-lg">{contractor.business_name}</h3>
+                          <h3 className="font-headline font-bold text-lg text-white">{contractor.business_name}</h3>
                           <div className="flex items-center gap-3 mt-1">
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1 text-sm text-neutral-400">
                               <Clock className="w-3.5 h-3.5" />
                               <span>{contractor.years_in_business} years</span>
                             </div>
@@ -128,20 +128,20 @@ export default function ContractorResults() {
                           </div>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground mb-3">
+                      <p className="text-sm text-neutral-400 mb-3">
                         Highly rated for {project.project_type} projects in the {project.zip_code} area.
                         Consistent quality and on-time completion reported across multiple review sources.
                       </p>
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <a href={`tel:${contractor.phone}`} className="flex items-center gap-1 hover:text-foreground">
+                        <div className="flex items-center gap-4 text-sm text-neutral-400">
+                          <a href={`tel:${contractor.phone}`} className="flex items-center gap-1 hover:text-white">
                             <Phone className="w-3.5 h-3.5" /> {contractor.phone}
                           </a>
-                          <a href={`mailto:${contractor.email}`} className="flex items-center gap-1 hover:text-foreground">
+                          <a href={`mailto:${contractor.email}`} className="flex items-center gap-1 hover:text-white">
                             <Mail className="w-3.5 h-3.5" /> Email
                           </a>
                           {contractor.website && (
-                            <a href={contractor.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground">
+                            <a href={contractor.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-white">
                               <Globe className="w-3.5 h-3.5" /> Website
                             </a>
                           )}
@@ -159,16 +159,16 @@ export default function ContractorResults() {
           <div className="space-y-6">
             <Card>
               <CardContent>
-                <h3 className="font-headline font-bold text-lg mb-4">Cost Estimate</h3>
-                <div className="text-3xl font-headline font-bold text-accent mb-1">
+                <h3 className="font-headline font-bold text-lg mb-4 text-white">Cost Estimate</h3>
+                <div className="text-3xl font-headline font-bold text-primary mb-1">
                   {formatCurrency(project.cost_estimate_low!)} - {formatCurrency(project.cost_estimate_high!)}
                 </div>
-                <p className="text-sm text-muted-foreground mb-4">
+                <p className="text-sm text-neutral-400 mb-4">
                   Confidence: {Math.round((project.cost_confidence || 0) * 100)}%
                 </p>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-accent rounded-full"
+                    className="h-full bg-primary rounded-full"
                     style={{ width: `${(project.cost_confidence || 0) * 100}%` }}
                   />
                 </div>

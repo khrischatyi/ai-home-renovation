@@ -1,217 +1,623 @@
-import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Bath, ChefHat, Square, Home as HomeIcon, ArrowRight, ArrowLeft, MapPin } from 'lucide-react'
-import Button from '@/components/ui/Button'
-import { Card, CardContent } from '@/components/ui/Card'
-import Input from '@/components/ui/Input'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { Bath, ChefHat, Square, Home as HomeIcon, Send, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react'
 import { projectsApi } from '@/api/projects'
 
-const projectTypes = [
+// ── Chat data definitions ──
+
+const projectTypeOptions = [
   { type: 'bathroom', label: 'Bathroom Remodel', icon: Bath },
   { type: 'kitchen', label: 'Kitchen Remodel', icon: ChefHat },
   { type: 'windows', label: 'Window Replacement', icon: Square },
   { type: 'roofing', label: 'Roofing', icon: HomeIcon },
 ]
 
-const scopeOptions: Record<string, { label: string; options: string[] }> = {
-  bathroom: { label: 'Scope', options: ['Full remodel', 'Partial update', 'Fixtures only', 'Tile work'] },
-  kitchen: { label: 'Scope', options: ['Full remodel', 'Cabinet refacing', 'Countertops only', 'Appliance upgrade'] },
-  windows: { label: 'Number of windows', options: ['1-3 windows', '4-6 windows', '7-10 windows', '10+ windows'] },
-  roofing: { label: 'Scope', options: ['Full replacement', 'Partial repair', 'Inspection only', 'Gutter work'] },
+const scopeOptions: Record<string, string[]> = {
+  bathroom: ['Full remodel', 'Partial update', 'Fixtures only', 'Tile work'],
+  kitchen: ['Full remodel', 'Cabinet refacing', 'Countertops only', 'Appliance upgrade'],
+  windows: ['1-3 windows', '4-6 windows', '7-10 windows', '10+ windows'],
+  roofing: ['Full replacement', 'Partial repair', 'Inspection only', 'Gutter work'],
 }
+
+const sizeOptions: Record<string, string[]> = {
+  bathroom: ['Small (under 40 sq ft)', 'Medium (40-70 sq ft)', 'Large (70+ sq ft)', 'Not sure'],
+  kitchen: ['Small (under 100 sq ft)', 'Medium (100-200 sq ft)', 'Large (200+ sq ft)', 'Not sure'],
+  windows: ['Double-hung', 'Casement', 'Sliding', 'Bay/Bow', 'Not sure'],
+  roofing: ['Small (under 1000 sq ft)', 'Medium (1000-2000 sq ft)', 'Large (2000+ sq ft)', 'Not sure'],
+}
+
+const workAreaOptions: Record<string, string[]> = {
+  bathroom: ['Shower/tub', 'Toilet', 'Vanity/sink', 'Flooring', 'Lighting', 'Plumbing'],
+  kitchen: ['Cabinets', 'Countertops', 'Appliances', 'Flooring', 'Lighting', 'Plumbing', 'Backsplash'],
+  windows: ['Wood frames', 'Vinyl frames', 'Aluminum frames', 'Not sure'],
+  roofing: ['Asphalt shingles', 'Metal', 'Tile', 'Flat/low-slope', 'Not sure'],
+}
+
+const propertyTypes = ['Single-family home', 'Townhouse', 'Condo/Apartment', 'Multi-family']
+const propertyAges = ['< 5 years', '5-15 years', '15-30 years', '30+ years']
+const ownershipOptions = ['I own it', "I'm buying it", "I'm renting"]
+const budgetOptions = ['Under $5K', '$5K-$15K', '$15K-$30K', '$30K-$50K', '$50K+', 'Not sure yet']
+const timelineOptions = ['ASAP', '1-3 months', '3-6 months', 'No rush']
+
+// ── Types ──
+
+type QuestionType =
+  | 'project_type' | 'zip_code' | 'property_type' | 'property_age'
+  | 'ownership' | 'scope' | 'size' | 'work_areas' | 'budget'
+  | 'timeline' | 'has_quotes' | 'is_emergency'
+  | 'contact_name' | 'contact_email' | 'notes' | 'confirm'
+
+interface Message {
+  id: string
+  sender: 'bot' | 'user'
+  text: string
+}
+
+interface IntakeData {
+  project_type: string
+  zip_code: string
+  property_type: string
+  property_age: string
+  ownership: string
+  scope: string
+  size: string
+  work_areas: string[]
+  budget: string
+  timeline: string
+  has_quotes: boolean | null
+  is_emergency: boolean | null
+  contact_name: string
+  contact_email: string
+  notes: string
+}
+
+// ── Question flow ──
+
+function getQuestionConfig(step: QuestionType, data: IntakeData) {
+  const pt = data.project_type
+  const configs: Record<QuestionType, { text: string; options?: string[]; multi?: boolean; input?: 'text' | 'email' | 'textarea'; placeholder?: string; skip?: boolean }> = {
+    project_type: {
+      text: "Hey! I'm here to help you find the perfect contractor. What type of project are you planning?",
+    },
+    zip_code: {
+      text: 'Great choice! What\'s your zip code? This helps me find local contractors.',
+      input: 'text',
+      placeholder: 'Enter zip code (e.g. 90210)',
+    },
+    property_type: {
+      text: 'What type of property is this for?',
+      options: propertyTypes,
+    },
+    property_age: {
+      text: 'How old is the property?',
+      options: propertyAges,
+    },
+    ownership: {
+      text: 'What\'s your ownership status?',
+      options: ownershipOptions,
+    },
+    scope: {
+      text: pt === 'windows' ? 'How many windows need replacing?' : `What's the scope of the project?`,
+      options: scopeOptions[pt] || [],
+    },
+    size: {
+      text: pt === 'windows' ? 'What type of windows do you have?' : 'How large is the space?',
+      options: sizeOptions[pt] || [],
+    },
+    work_areas: {
+      text: ['bathroom', 'kitchen'].includes(pt) ? 'Which areas need work? Pick all that apply.' : pt === 'windows' ? 'Current frame material?' : 'What type of roofing?',
+      options: workAreaOptions[pt] || [],
+      multi: pt === 'bathroom' || pt === 'kitchen',
+    },
+    budget: {
+      text: 'What\'s your approximate budget?',
+      options: budgetOptions,
+    },
+    timeline: {
+      text: 'When do you need this done?',
+      options: timelineOptions,
+    },
+    has_quotes: {
+      text: 'Have you gotten any quotes already?',
+      options: ['Yes', 'No'],
+    },
+    is_emergency: {
+      text: 'Is this an emergency or urgent repair?',
+      options: ['Yes, it\'s urgent', 'No, not urgent'],
+    },
+    contact_name: {
+      text: 'Almost done! What\'s your name? (optional — hit send to skip)',
+      input: 'text',
+      placeholder: 'Your name',
+      skip: true,
+    },
+    contact_email: {
+      text: 'Email for project updates? (also optional)',
+      input: 'email',
+      placeholder: 'you@example.com',
+      skip: true,
+    },
+    notes: {
+      text: 'Anything else contractors should know? (optional)',
+      input: 'textarea',
+      placeholder: 'Special requirements, preferences...',
+      skip: true,
+    },
+    confirm: {
+      text: `Here's your project summary:\n\n` +
+        `**Project:** ${pt ? pt.charAt(0).toUpperCase() + pt.slice(1) : ''} — ${data.scope}\n` +
+        `**Location:** ${data.zip_code} • ${data.property_type}\n` +
+        `**Property:** ${data.property_age} • ${data.ownership}\n` +
+        `**Size:** ${data.size}\n` +
+        `**Details:** ${data.work_areas.join(', ')}\n` +
+        `**Budget:** ${data.budget} • **Timeline:** ${data.timeline}\n` +
+        (data.contact_name ? `**Name:** ${data.contact_name}\n` : '') +
+        (data.contact_email ? `**Email:** ${data.contact_email}\n` : '') +
+        (data.notes ? `**Notes:** ${data.notes}\n` : '') +
+        `\nReady? I'll find the best contractors for you!`,
+      options: ['Find my contractors!', 'Start over'],
+    },
+  }
+  return configs[step]
+}
+
+const QUESTION_ORDER: QuestionType[] = [
+  'project_type', 'zip_code', 'property_type', 'property_age', 'ownership',
+  'scope', 'size', 'work_areas', 'budget', 'timeline', 'has_quotes',
+  'is_emergency', 'contact_name', 'contact_email', 'notes', 'confirm',
+]
+
+// ── Component ──
 
 export default function ProjectIntake() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [step, setStep] = useState(1)
-  const [projectType, setProjectType] = useState(searchParams.get('type') || '')
-  const [zipCode, setZipCode] = useState('')
-  const [scope, setScope] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const initRef = useRef(false)
+
+  const [messages, setMessages] = useState<Message[]>([])
+  const [currentStep, setCurrentStep] = useState<QuestionType>('project_type')
+  const [inputValue, setInputValue] = useState('')
+  const [selectedMulti, setSelectedMulti] = useState<string[]>([])
+  const [isTyping, setIsTyping] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [data, setData] = useState<IntakeData>({
+    project_type: '', zip_code: '', property_type: '', property_age: '',
+    ownership: '', scope: '', size: '', work_areas: [], budget: '',
+    timeline: '', has_quotes: null, is_emergency: null,
+    contact_name: '', contact_email: '', notes: '',
+  })
 
+  const addMessage = useCallback((sender: 'bot' | 'user', text: string) => {
+    setMessages(prev => [...prev, {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      sender,
+      text,
+    }])
+  }, [])
+
+  const showBotMessage = useCallback((text: string) => {
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      addMessage('bot', text)
+    }, 500 + Math.random() * 300)
+  }, [addMessage])
+
+  // Initialize
   useEffect(() => {
-    if (searchParams.get('type')) {
-      setStep(2)
+    if (initRef.current) return
+    initRef.current = true
+    const preselectedType = searchParams.get('type')
+    if (preselectedType && ['bathroom', 'kitchen', 'windows', 'roofing'].includes(preselectedType)) {
+      const label = projectTypeOptions.find(p => p.type === preselectedType)?.label || preselectedType
+      setData(prev => ({ ...prev, project_type: preselectedType }))
+      const config = getQuestionConfig('project_type', { ...data, project_type: preselectedType })
+      addMessage('bot', config.text)
+      addMessage('user', label)
+      const nextConfig = getQuestionConfig('zip_code', { ...data, project_type: preselectedType })
+      setTimeout(() => {
+        addMessage('bot', nextConfig.text)
+        setCurrentStep('zip_code')
+      }, 500)
+    } else {
+      const config = getQuestionConfig('project_type', data)
+      addMessage('bot', config.text)
     }
-  }, [searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  const handleSubmit = async () => {
+  // Auto-scroll
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isTyping])
+
+  // Focus input
+  useEffect(() => {
+    const config = getQuestionConfig(currentStep, data)
+    if (config.input === 'textarea') {
+      textareaRef.current?.focus()
+    } else if (config.input) {
+      inputRef.current?.focus()
+    }
+  }, [currentStep, data])
+
+  const advanceToNextStep = useCallback((updatedData: IntakeData) => {
+    const idx = QUESTION_ORDER.indexOf(currentStep)
+    if (idx < QUESTION_ORDER.length - 1) {
+      const next = QUESTION_ORDER[idx + 1]
+      setCurrentStep(next)
+      showBotMessage(getQuestionConfig(next, updatedData).text)
+    }
+  }, [currentStep, showBotMessage])
+
+  const handleOptionSelect = (option: string) => {
+    if (isTyping || isSubmitting) return
+    let updatedData = { ...data }
+    let displayText = option
+
+    switch (currentStep) {
+      case 'project_type': {
+        const pt = projectTypeOptions.find(p => p.label === option)
+        if (pt) { updatedData.project_type = pt.type; displayText = pt.label }
+        break
+      }
+      case 'property_type': updatedData.property_type = option; break
+      case 'property_age': updatedData.property_age = option; break
+      case 'ownership': updatedData.ownership = option; break
+      case 'scope': updatedData.scope = option; break
+      case 'size': updatedData.size = option; break
+      case 'work_areas': updatedData.work_areas = [option]; break
+      case 'budget': updatedData.budget = option; break
+      case 'timeline': updatedData.timeline = option; break
+      case 'has_quotes': updatedData.has_quotes = option === 'Yes'; break
+      case 'is_emergency': updatedData.is_emergency = option.startsWith('Yes'); break
+      case 'confirm':
+        if (option === 'Start over') {
+          setMessages([])
+          setCurrentStep('project_type')
+          setData({ project_type: '', zip_code: '', property_type: '', property_age: '', ownership: '', scope: '', size: '', work_areas: [], budget: '', timeline: '', has_quotes: null, is_emergency: null, contact_name: '', contact_email: '', notes: '' })
+          setTimeout(() => addMessage('bot', getQuestionConfig('project_type', data).text), 300)
+          return
+        }
+        handleSubmit(updatedData)
+        return
+    }
+    setData(updatedData)
+    addMessage('user', displayText)
+    advanceToNextStep(updatedData)
+  }
+
+  const handleMultiConfirm = () => {
+    if (selectedMulti.length === 0 || isTyping) return
+    const updatedData = { ...data, work_areas: selectedMulti }
+    setData(updatedData)
+    addMessage('user', selectedMulti.join(', '))
+    setSelectedMulti([])
+    advanceToNextStep(updatedData)
+  }
+
+  const toggleMultiOption = (opt: string) => {
+    setSelectedMulti(prev => prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt])
+  }
+
+  const handleInputSubmit = () => {
+    if (isTyping || isSubmitting) return
+    const config = getQuestionConfig(currentStep, data)
+    const value = inputValue.trim()
+
+    if (!value && config.skip) {
+      addMessage('user', 'Skipped')
+      setInputValue('')
+      advanceToNextStep({ ...data })
+      return
+    }
+    if (!value) return
+
+    if (currentStep === 'zip_code' && !/^\d{5}$/.test(value)) {
+      showBotMessage("That doesn't look right. Please enter a 5-digit US zip code.")
+      return
+    }
+    if (currentStep === 'contact_email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      showBotMessage("That doesn't look like a valid email. Try again or hit send to skip.")
+      return
+    }
+
+    const updatedData = { ...data }
+    switch (currentStep) {
+      case 'zip_code': updatedData.zip_code = value; break
+      case 'contact_name': updatedData.contact_name = value; break
+      case 'contact_email': updatedData.contact_email = value; break
+      case 'notes': updatedData.notes = value; break
+    }
+    setData(updatedData)
+    addMessage('user', value)
+    setInputValue('')
+    advanceToNextStep(updatedData)
+  }
+
+  const handleSubmit = async (finalData: IntakeData) => {
     setIsSubmitting(true)
     setError('')
+    addMessage('user', 'Find my contractors!')
+    showBotMessage('Searching for the best contractors... One moment!')
+
     try {
       const response = await projectsApi.create({
-        project_type: projectType,
-        zip_code: zipCode,
-        scope: { level: scope },
-        preferences: {},
+        project_type: finalData.project_type,
+        zip_code: finalData.zip_code,
+        scope: {
+          level: finalData.scope,
+          property_type: finalData.property_type,
+          property_age: finalData.property_age,
+          ownership: finalData.ownership,
+          size: finalData.size,
+          work_areas: finalData.work_areas,
+          budget_range: finalData.budget,
+          timeline: finalData.timeline,
+          has_quotes: finalData.has_quotes,
+          is_emergency: finalData.is_emergency,
+        },
+        preferences: {
+          contact_name: finalData.contact_name,
+          contact_email: finalData.contact_email,
+          notes: finalData.notes,
+        },
       })
       const project = (response as any).data
       navigate(`/project/${project.id}/results`)
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Something went wrong. Please try again.')
-    } finally {
       setIsSubmitting(false)
+      setError(err.response?.data?.error?.message || 'Something went wrong.')
+      showBotMessage('Sorry, something went wrong. Please try again.')
     }
   }
 
-  return (
-    <div className="bg-cream min-h-screen">
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        {/* Progress bar */}
-        <div className="flex items-center gap-2 mb-12">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex-1">
-              <div className={`h-1 rounded-full transition-colors ${s <= step ? 'bg-accent' : 'bg-border'}`} />
-            </div>
-          ))}
-        </div>
+  const config = getQuestionConfig(currentStep, data)
 
-        {/* Step 1: Project Type */}
-        {step === 1 && (
-          <div>
-            <h1 className="font-headline font-bold text-3xl md:text-4xl mb-2">What are you renovating?</h1>
-            <p className="text-muted-foreground mb-8">Select your project type to get started.</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {projectTypes.map(({ type, label, icon: Icon }) => (
-                <Card
-                  key={type}
-                  className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                    projectType === type ? 'border-accent shadow-md ring-2 ring-accent/20' : ''
-                  }`}
-                  onClick={() => { setProjectType(type); setStep(2) }}
-                >
-                  <CardContent className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-cream flex items-center justify-center">
-                      <Icon className="w-6 h-6 text-accent" />
-                    </div>
-                    <span className="font-headline font-bold text-lg">{label}</span>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+  const renderBotText = (text: string) => {
+    return text.split('\n').map((line, i) => (
+      <span key={i}>
+        {line.split(/(\*\*.*?\*\*)/).map((part, j) =>
+          part.startsWith('**') && part.endsWith('**')
+            ? <strong key={j} className="text-white font-semibold">{part.slice(2, -2)}</strong>
+            : part
         )}
+        {i < text.split('\n').length - 1 && <br />}
+      </span>
+    ))
+  }
 
-        {/* Step 2: Details */}
-        {step === 2 && (
-          <div>
-            <button onClick={() => setStep(1)} className="flex items-center gap-1 text-sm text-muted-foreground mb-6 hover:text-foreground cursor-pointer">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </button>
-            <h1 className="font-headline font-bold text-3xl md:text-4xl mb-2">Tell us about your project</h1>
-            <p className="text-muted-foreground mb-8">We'll use this to find the best contractors and estimate costs.</p>
+  const currentStepIndex = QUESTION_ORDER.indexOf(currentStep)
 
-            <div className="space-y-6">
-              <div>
-                <Input
-                  label="Zip Code"
-                  id="zipCode"
-                  placeholder="e.g. 90210"
-                  value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
-                  maxLength={5}
-                />
-                <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
-                  <MapPin className="w-3 h-3" />
-                  <span>Used to find local contractors and regional pricing</span>
-                </div>
-              </div>
+  return (
+    <div className="fixed inset-0 bg-[#0c0f14] flex flex-col">
+      {/* ── Header ── */}
+      <div className="flex-shrink-0 border-b border-white/10 bg-[#0c0f14]/95 backdrop-blur-sm safe-top">
+        <div className="max-w-2xl mx-auto flex items-center gap-3 px-4 h-14">
+          <Link to="/" className="p-1.5 -ml-1.5 rounded-lg hover:bg-white/5 transition-colors" aria-label="Back to home">
+            <ArrowLeft className="w-5 h-5 text-neutral-400" />
+          </Link>
+          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-4 h-4 text-primary" />
+          </div>
+          <span className="font-headline font-bold text-white text-base">helpico<span className="text-primary">.ai</span></span>
+          <div className="flex-1" />
+          {/* Step dots */}
+          <div className="flex items-center gap-1">
+            {QUESTION_ORDER.map((_, i) => (
+              <div
+                key={i}
+                className={`rounded-full transition-all duration-300 ${
+                  i < currentStepIndex
+                    ? 'w-1.5 h-1.5 bg-primary'
+                    : i === currentStepIndex
+                    ? 'w-2.5 h-2.5 bg-primary ring-2 ring-primary/30'
+                    : 'w-1.5 h-1.5 bg-white/15'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
 
-              {projectType && scopeOptions[projectType] && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    {scopeOptions[projectType].label}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {scopeOptions[projectType].options.map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => setScope(opt)}
-                        className={`p-3 rounded-lg border text-left text-sm font-medium transition-all cursor-pointer ${
-                          scope === opt
-                            ? 'border-accent bg-amber-50 text-accent'
-                            : 'border-border bg-white hover:border-warm-gray'
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
+      {/* ── Messages ── */}
+      <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="max-w-2xl mx-auto px-4 py-5 space-y-3 min-h-full flex flex-col">
+          {/* Push initial messages toward center */}
+          {messages.length <= 4 && <div className="flex-1" />}
+          {messages.map((msg) => (
+            <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-[fadeSlideIn_0.25s_ease-out]`}>
+              {msg.sender === 'bot' && (
+                <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center mr-2 mt-0.5 flex-shrink-0">
+                  <Sparkles className="w-3 h-3 text-primary" />
                 </div>
               )}
-
-              <Button
-                variant="primary"
-                size="lg"
-                className="w-full mt-4"
-                onClick={() => setStep(3)}
-                disabled={!zipCode || !scope}
-              >
-                Continue
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Review */}
-        {step === 3 && (
-          <div>
-            <button onClick={() => setStep(2)} className="flex items-center gap-1 text-sm text-muted-foreground mb-6 hover:text-foreground cursor-pointer">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </button>
-            <h1 className="font-headline font-bold text-3xl md:text-4xl mb-2">Review your project</h1>
-            <p className="text-muted-foreground mb-8">Confirm details and get your contractor matches.</p>
-
-            <Card className="mb-6">
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Project Type</span>
-                  <span className="font-medium capitalize">{projectType.replace('_', ' ')}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Zip Code</span>
-                  <span className="font-medium">{zipCode}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Scope</span>
-                  <span className="font-medium">{scope}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-              <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-green-800">Your data stays private</p>
-                <p className="text-sm text-green-600">No account needed. We won't share your info with contractors.</p>
+              <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3.5 py-2.5 text-[14px] leading-relaxed ${
+                msg.sender === 'user'
+                  ? 'bg-primary text-white rounded-br-sm'
+                  : 'bg-white/[0.06] text-neutral-300 rounded-bl-sm'
+              }`}>
+                {msg.sender === 'bot' ? renderBotText(msg.text) : msg.text}
               </div>
             </div>
+          ))}
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-600">
-                {error}
+          {/* Typing indicator */}
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center mr-2 mt-0.5 flex-shrink-0">
+                <Sparkles className="w-3 h-3 text-primary" />
+              </div>
+              <div className="bg-white/[0.06] rounded-2xl rounded-bl-sm px-4 py-3">
+                <div className="flex gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce [animation-delay:0ms]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce [animation-delay:150ms]" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce [animation-delay:300ms]" />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submitting */}
+          {isSubmitting && !isTyping && (
+            <div className="flex justify-start">
+              <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center mr-2 mt-0.5 flex-shrink-0">
+                <Sparkles className="w-3 h-3 text-primary" />
+              </div>
+              <div className="bg-white/[0.06] rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-neutral-400 flex items-center gap-2">
+                <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                Searching...
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 text-center">
+              {error}
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+      </div>
+
+      {/* ── Input Area ── */}
+      {!isSubmitting && !isTyping && (
+        <div className="flex-shrink-0 border-t border-white/10 bg-[#0c0f14]/95 backdrop-blur-sm safe-bottom">
+          <div className="max-w-2xl mx-auto px-3 py-3 space-y-2">
+
+            {/* Project type grid */}
+            {currentStep === 'project_type' && (
+              <div className="grid grid-cols-2 gap-2">
+                {projectTypeOptions.map(({ type, label, icon: Icon }) => (
+                  <button
+                    key={type}
+                    onClick={() => handleOptionSelect(label)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-neutral-200 text-[13px] font-medium hover:bg-white/[0.08] hover:border-primary/30 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <Icon className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            <Button
-              variant="primary"
-              size="lg"
-              className="w-full"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Finding contractors...' : 'Find My Contractors'}
-              {!isSubmitting && <ArrowRight className="w-5 h-5 ml-2" />}
-            </Button>
+            {/* Single-select pills */}
+            {currentStep !== 'project_type' && config.options && !config.multi && (
+              <div className="flex flex-wrap gap-1.5">
+                {config.options.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => handleOptionSelect(opt)}
+                    className="px-3.5 py-2 rounded-full bg-white/[0.04] border border-white/[0.08] text-neutral-200 text-[13px] font-medium hover:bg-white/[0.08] hover:border-primary/30 active:scale-[0.97] transition-all cursor-pointer"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Multi-select pills */}
+            {config.multi && config.options && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {config.options.map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => toggleMultiOption(opt)}
+                      className={`px-3.5 py-2 rounded-full border text-[13px] font-medium transition-all cursor-pointer active:scale-[0.97] ${
+                        selectedMulti.includes(opt)
+                          ? 'bg-primary/15 border-primary/40 text-primary'
+                          : 'bg-white/[0.04] border-white/[0.08] text-neutral-200 hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                {selectedMulti.length > 0 && (
+                  <button
+                    onClick={handleMultiConfirm}
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-primary text-white text-[13px] font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Continue with {selectedMulti.length} selected
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Text / email input */}
+            {config.input && config.input !== 'textarea' && (
+              <div className="flex gap-2">
+                <input
+                  ref={inputRef}
+                  type={config.input}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
+                  placeholder={config.placeholder}
+                  className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[14px] text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+                  autoComplete={currentStep === 'contact_email' ? 'email' : currentStep === 'contact_name' ? 'name' : 'off'}
+                />
+                <button
+                  onClick={handleInputSubmit}
+                  className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white hover:bg-primary/90 active:scale-[0.95] transition-all cursor-pointer flex-shrink-0"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Textarea */}
+            {config.input === 'textarea' && (
+              <div className="space-y-2">
+                <textarea
+                  ref={textareaRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={config.placeholder}
+                  rows={2}
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[14px] text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors resize-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setInputValue(''); handleInputSubmit() }}
+                    className="flex-1 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-neutral-400 text-[13px] font-medium hover:bg-white/[0.08] transition-colors cursor-pointer"
+                  >
+                    Skip
+                  </button>
+                  <button
+                    onClick={handleInputSubmit}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary text-white text-[13px] font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Privacy */}
+            <p className="text-center text-[11px] text-neutral-600 pb-1">
+              Your data stays private &middot; No account needed
+            </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+      `}</style>
     </div>
   )
 }

@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Bath, ChefHat, Square, Home as HomeIcon, Shield, Lock, Eye, Zap, DollarSign, Paintbrush, ArrowRight, CheckCircle } from 'lucide-react'
+import { Bath, ChefHat, Square, Home as HomeIcon, Shield, Lock, Eye, Zap, DollarSign, Paintbrush, ArrowRight, CheckCircle, Clock, UserCheck, Star } from 'lucide-react'
 import Button from '@/components/ui/Button'
-import { Card, CardContent } from '@/components/ui/Card'
 
 const projectTypes = [
   { type: 'bathroom', label: 'Bathroom Remodel', icon: Bath, desc: 'Full or partial bathroom renovation', range: '$8K - $25K' },
@@ -22,81 +21,93 @@ const valueProps = [
   { icon: Paintbrush, title: 'AI-Powered Design', desc: 'Visualize your renovation with AI. Select materials, see renders, get detailed breakdowns.' },
 ]
 
+const stats = [
+  { icon: Clock, value: '90 sec', label: 'Results in 90 seconds' },
+  { icon: UserCheck, value: 'Free', label: 'No account needed' },
+  { icon: Star, value: '100%', label: '100% free to start' },
+]
+
 export default function Home() {
   return (
     <div>
-      {/* Hero Section */}
-      <section className="bg-cream">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
-          <div className="max-w-4xl">
-            <h1 className="font-headline font-black text-5xl md:text-7xl lg:text-8xl text-foreground leading-[0.95] tracking-tight">
-              Transform Your Home With Confidence
+      {/* Hero Section — Dark */}
+      <section className="bg-dark relative overflow-hidden">
+        {/* Subtle gradient glow */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-28 md:py-40">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-neutral-300 mb-8">
+              <Star className="w-4 h-4 text-primary" />
+              Finally, a renovation service on your side
+            </div>
+
+            <h1 className="font-headline font-black text-5xl md:text-7xl lg:text-8xl text-white leading-[0.95] tracking-tight">
+              Renovate with{' '}
+              <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                confidence
+              </span>
+              , not confusion
             </h1>
-            <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl">
+
+            <p className="mt-8 text-lg md:text-xl text-neutral-400 max-w-2xl mx-auto">
               AI-powered contractor matching, transparent cost estimates, and project visualization.
-              No data selling. No lead generation. Just honest help for homeowners.
+              No data selling. No lead generation. Just honest help.
             </p>
-            <div className="mt-10 flex flex-wrap gap-4">
+
+            <div className="mt-10 flex flex-wrap gap-4 justify-center">
               <Link to="/project/new">
                 <Button variant="primary" size="lg">
-                  Get Started Free
+                  Start my project
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
-              <Button variant="outline" size="lg">
-                See How It Works
-              </Button>
             </div>
-            <div className="mt-8 flex items-center gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span>No account required</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span>Results in seconds</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span>100% free to start</span>
-              </div>
+
+            <div className="mt-10 flex items-center justify-center gap-8 text-sm text-neutral-400">
+              {stats.map(({ icon: Icon, label }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <Icon className="w-4 h-4 text-primary" />
+                  <span>{label}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
       {/* Project Types */}
-      <section className="bg-white">
+      <section className="bg-[#111318]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <h2 className="font-headline font-bold text-3xl md:text-4xl text-center mb-4">
+          <h2 className="font-headline font-bold text-3xl md:text-4xl text-center mb-4 text-white">
             What are you renovating?
           </h2>
-          <p className="text-muted-foreground text-center mb-12 max-w-lg mx-auto">
+          <p className="text-neutral-400 text-center mb-12 max-w-lg mx-auto">
             Select your project type to get matched with top contractors in your area.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {projectTypes.map(({ type, label, icon: Icon, desc, range }) => (
               <Link key={type} to={`/project/new?type=${type}`}>
-                <Card className="hover:shadow-lg hover:border-accent/30 transition-all duration-200 cursor-pointer h-full">
-                  <CardContent>
-                    <div className="w-12 h-12 rounded-xl bg-cream flex items-center justify-center mb-4">
-                      <Icon className="w-6 h-6 text-accent" />
-                    </div>
-                    <h3 className="font-headline font-bold text-lg mb-2">{label}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{desc}</p>
-                    <span className="text-sm font-medium text-accent">{range}</span>
-                  </CardContent>
-                </Card>
+                <div className="group bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/8 hover:border-primary/30 transition-all duration-200 cursor-pointer h-full">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/20 transition-colors">
+                    <Icon className="w-6 h-6 text-primary" />
+                  </div>
+                  <h3 className="font-headline font-bold text-lg mb-2 text-white">{label}</h3>
+                  <p className="text-sm text-neutral-400 mb-3">{desc}</p>
+                  <span className="text-sm font-medium text-primary">{range}</span>
+                </div>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Trust Section - Dark */}
-      <section className="bg-dark text-dark-foreground">
+      {/* Trust Section */}
+      <section className="bg-dark">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-          <h2 className="font-headline font-black text-4xl md:text-6xl text-center mb-6">
+          <h2 className="font-headline font-black text-4xl md:text-6xl text-center mb-6 text-white">
             We Don't Sell Your Data
           </h2>
           <p className="text-neutral-400 text-center max-w-2xl mx-auto mb-16 text-lg">
@@ -106,10 +117,10 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {trustPoints.map(({ icon: Icon, title, desc }) => (
               <div key={title} className="text-center">
-                <div className="w-14 h-14 rounded-full bg-neutral-800 flex items-center justify-center mx-auto mb-4">
+                <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
                   <Icon className="w-7 h-7 text-green-400" />
                 </div>
-                <h3 className="font-headline font-bold text-xl mb-2">{title}</h3>
+                <h3 className="font-headline font-bold text-xl mb-2 text-white">{title}</h3>
                 <p className="text-neutral-400">{desc}</p>
               </div>
             ))}
@@ -118,34 +129,32 @@ export default function Home() {
       </section>
 
       {/* Value Props */}
-      <section className="bg-cream">
+      <section className="bg-[#111318]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <h2 className="font-headline font-bold text-3xl md:text-4xl text-center mb-12">
+          <h2 className="font-headline font-bold text-3xl md:text-4xl text-center mb-12 text-white">
             Everything you need to renovate smarter
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {valueProps.map(({ icon: Icon, title, desc }) => (
-              <Card key={title} className="text-center p-8">
-                <CardContent>
-                  <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-6">
-                    <Icon className="w-7 h-7 text-accent" />
-                  </div>
-                  <h3 className="font-headline font-bold text-xl mb-3">{title}</h3>
-                  <p className="text-muted-foreground">{desc}</p>
-                </CardContent>
-              </Card>
+              <div key={title} className="text-center bg-white/5 border border-white/10 rounded-2xl p-8">
+                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                  <Icon className="w-7 h-7 text-primary" />
+                </div>
+                <h3 className="font-headline font-bold text-xl mb-3 text-white">{title}</h3>
+                <p className="text-neutral-400">{desc}</p>
+              </div>
             ))}
           </div>
         </div>
       </section>
 
       {/* Final CTA */}
-      <section className="bg-white">
+      <section className="bg-dark">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
-          <h2 className="font-headline font-black text-4xl md:text-5xl mb-6">
+          <h2 className="font-headline font-black text-4xl md:text-5xl mb-6 text-white">
             Ready to renovate?
           </h2>
-          <p className="text-muted-foreground text-lg mb-10 max-w-lg mx-auto">
+          <p className="text-neutral-400 text-lg mb-10 max-w-lg mx-auto">
             Get matched with top contractors in your area. Free, instant, and private.
           </p>
           <Link to="/project/new">

@@ -1,4 +1,4 @@
-import { Home, Shield, Lock } from 'lucide-react'
+import { Sparkles, Shield, Lock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function Footer() {
@@ -8,8 +8,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <Home className="w-6 h-6 text-accent" />
-              <span className="font-headline font-bold text-xl">RenovateAI</span>
+              <Sparkles className="w-6 h-6 text-primary" />
+              <span className="font-headline font-bold text-xl">helpico<span className="text-primary">.ai</span></span>
             </div>
             <p className="text-neutral-400 max-w-md">
               The first AI-native home renovation platform that serves homeowners, not contractors.
@@ -47,7 +47,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-neutral-800 mt-12 pt-8 text-center text-sm text-neutral-500">
-          &copy; {new Date().getFullYear()} RenovateAI. All rights reserved.
+          &copy; {new Date().getFullYear()} helpico.ai. All rights reserved.
         </div>
       </div>
     </footer>

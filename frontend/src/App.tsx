@@ -19,9 +19,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Full-screen chat — no header/footer */}
+        <Route path="/project/new" element={<ProjectIntake />} />
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/project/new" element={<ProjectIntake />} />
           <Route path="/project/:id/results" element={<ContractorResults />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

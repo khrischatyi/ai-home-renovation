@@ -28,13 +28,13 @@ export default function Register() {
   }
 
   return (
-    <div className="bg-cream min-h-screen flex items-center justify-center px-4">
+    <div className="bg-dark min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="font-headline font-bold text-3xl">Create your account</h1>
-          <p className="text-muted-foreground mt-2">Start your renovation journey</p>
+          <h1 className="font-headline font-bold text-3xl text-white">Create your account</h1>
+          <p className="text-neutral-400 mt-2">Start your renovation journey</p>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-border p-8">
+        <div className="bg-white/5 rounded-xl border border-white/10 p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Full Name"
@@ -62,14 +62,14 @@ export default function Register() {
               required
               minLength={8}
             />
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && <p className="text-sm text-red-400">{error}</p>}
             <Button variant="primary" size="lg" className="w-full" type="submit" disabled={isLoading}>
               {isLoading ? 'Creating account...' : 'Create Account'}
             </Button>
           </form>
-          <p className="text-center text-sm text-muted-foreground mt-6">
+          <p className="text-center text-sm text-neutral-400 mt-6">
             Already have an account?{' '}
-            <Link to="/login" className="text-accent font-medium hover:underline">Sign in</Link>
+            <Link to="/login" className="text-primary font-medium hover:underline">Sign in</Link>
           </p>
         </div>
       </div>

@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-home-renovation-backend"
+version = "0.1.0"
+description = "AI Home Renovation Platform Backend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "alembic",
+    "pydantic-settings",
+    "celery[redis]",
+    "redis",
+    "python-jose[cryptography]",
+    "passlib[bcrypt]",
+    "bcrypt",
+    "stripe",
+    "httpx",
+    "python-multipart",
+    "email-validator",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+]

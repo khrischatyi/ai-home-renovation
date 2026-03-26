@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palmetto-inspired warm color palette */
+  --color-background: #FAF5F2;
+  --color-foreground: #0F172A;
+  --color-card: #FFFFFF;
+  --color-card-foreground: #0F172A;
+  --color-primary: #78716C;
+  --color-primary-foreground: #FFFFFF;
+  --color-secondary: #A8A29E;
+  --color-secondary-foreground: #FFFFFF;
+  --color-accent: #D97706;
+  --color-accent-foreground: #FFFFFF;
+  --color-muted: #F6F6F6;
+  --color-muted-foreground: #64748B;
+  --color-border: #EEEDED;
+  --color-destructive: #DC2626;
+  --color-dark: #1A1A1A;
+  --color-dark-foreground: #F8FAFC;
+  --color-cream: #FAF5F2;
+  --color-amber: #D97706;
+  --color-warm-gray: #78716C;
+
+  /* Font families */
+  --font-headline: 'Epilogue', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-body);
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-headline);
+  }
+}

@@ -1,0 +1,30 @@
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir pip --upgrade
+
+COPY pyproject.toml .
+RUN pip install --no-cache-dir ".[prod]" \
+    || pip install --no-cache-dir .
+
+COPY . .
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid 1000 --create-home appuser
+
+COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app /app
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+EXPOSE 8000
+
+CMD ["gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]

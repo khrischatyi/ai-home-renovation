@@ -30,6 +30,9 @@ dependencies = [
 packages = ["app"]
 
 [project.optional-dependencies]
+prod = [
+    "gunicorn",
+]
 dev = [
     "pytest",
     "pytest-asyncio",

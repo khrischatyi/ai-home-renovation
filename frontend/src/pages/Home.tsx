@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Bath, ChefHat, Square, Home as HomeIcon, Shield, Lock, Eye, Zap, DollarSign, Paintbrush, ArrowRight, CheckCircle, Clock, UserCheck, Star } from 'lucide-react'
+import { Bath, ChefHat, Square, Home as HomeIcon, Shield, Lock, Eye, Zap, DollarSign, Paintbrush, ArrowRight, Clock, UserCheck, Star } from 'lucide-react'
 import Button from '@/components/ui/Button'
 
 const projectTypes = [

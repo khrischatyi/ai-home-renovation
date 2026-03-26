@@ -12,6 +12,7 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates
 
-COPY --from=builder /app/dist /srv/frontend
+COPY --from=builder /app/dist /app/dist
 
-EXPOSE 3000
+# Copy built files into the shared volume on startup, then sleep
+CMD ["sh", "-c", "cp -r /app/dist/* /srv/frontend/ && echo 'Frontend assets deployed' && sleep infinity"]

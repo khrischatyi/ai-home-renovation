@@ -81,12 +81,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
+    volumes:
+      - frontend_dist:/srv/frontend
     restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine
     volumes:
       - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile
+      - frontend_dist:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
     ports:
@@ -100,5 +103,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  frontend_dist:
   caddy_data:
   caddy_config:

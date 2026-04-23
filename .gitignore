@@ -19,19 +19,31 @@ postgres_data/
 
 # Environment
 .env
+.env.local
 !.env.example
 
-# IDE
+# IDE / editor metadata
 .vscode/
 .idea/
 *.swp
 *.swo
 
+# AI agent / plugin caches (per-machine, not code)
+.agents/
+.claude/
+.junie/
+skills-lock.json
+
 # OS
 .DS_Store
 Thumbs.db
 
-# Coverage
+# Coverage / test artifacts
 htmlcov/
 .coverage
 coverage.xml
+.pytest_cache/
+
+# Logs
+*.log
+logs/

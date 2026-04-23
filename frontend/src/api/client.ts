@@ -8,8 +8,18 @@ const api = axios.create({
   },
 })
 
-// Paths that should not trigger redirect on 401
-const AUTH_CHECK_PATHS = ['/users/me', '/auth/refresh']
+// Paths that should NOT trigger the global "refresh-or-redirect-to-login"
+// fallback on a 401. These are either auth-establishing endpoints (where a
+// 401 means "bad credentials", not "session expired") or read-only auth
+// probes used to populate the store.
+const AUTH_CHECK_PATHS = [
+  '/users/me',
+  '/auth/refresh',
+  '/auth/login',
+  '/auth/register',
+  '/auth/ensure-from-intake',
+  '/auth/check-email',
+]
 
 api.interceptors.response.use(
   (response) => response.data,

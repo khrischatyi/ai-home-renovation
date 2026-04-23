@@ -15,8 +15,20 @@ class UserRepository:
         result = await db.execute(select(User).where(User.email == email))
         return result.scalar_one_or_none()
 
-    async def create(self, db: AsyncSession, email: str, hashed_password: str, full_name: str | None = None) -> User:
-        user = User(email=email, hashed_password=hashed_password, full_name=full_name)
+    async def create(
+        self,
+        db: AsyncSession,
+        email: str,
+        hashed_password: str,
+        full_name: str | None = None,
+        password_set: bool = True,
+    ) -> User:
+        user = User(
+            email=email,
+            hashed_password=hashed_password,
+            full_name=full_name,
+            password_set=password_set,
+        )
         db.add(user)
         await db.flush()
         await db.refresh(user)

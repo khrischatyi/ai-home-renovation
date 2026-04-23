@@ -26,7 +26,35 @@ class UserResponse(BaseModel):
     email: str
     full_name: str | None
     is_active: bool
+    password_set: bool
     created_at: datetime
+
+
+class CheckEmailRequest(BaseModel):
+    email: EmailStr
+
+
+class CheckEmailResponse(BaseModel):
+    exists: bool
+
+
+class EnsureFromIntakeRequest(BaseModel):
+    email: EmailStr
+    full_name: str | None = None
+
+
+class ClaimPasswordRequest(BaseModel):
+    password: str
+
+
+class RequestPasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
 
 
 class TokenResponse(BaseModel):

@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Bath, ChefHat, Square, Home as HomeIcon, Send, ArrowRight, Sparkles, ArrowLeft } from 'lucide-react'
 import { projectsApi } from '@/api/projects'
+import { authApi } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth'
 
 // ── Chat data definitions ──
 
@@ -45,7 +47,9 @@ type QuestionType =
   | 'project_type' | 'zip_code' | 'property_type' | 'property_age'
   | 'ownership' | 'scope' | 'size' | 'work_areas' | 'budget'
   | 'timeline' | 'has_quotes' | 'is_emergency'
-  | 'contact_name' | 'contact_email' | 'notes' | 'confirm'
+  | 'contact_name' | 'contact_email' | 'contact_email_password'
+  | 'password_reset_code' | 'password_reset_new_password'
+  | 'notes' | 'confirm'
 
 interface Message {
   id: string
@@ -75,7 +79,7 @@ interface IntakeData {
 
 function getQuestionConfig(step: QuestionType, data: IntakeData) {
   const pt = data.project_type
-  const configs: Record<QuestionType, { text: string; options?: string[]; multi?: boolean; input?: 'text' | 'email' | 'textarea'; placeholder?: string; skip?: boolean }> = {
+  const configs: Record<QuestionType, { text: string; options?: string[]; multi?: boolean; input?: 'text' | 'email' | 'password' | 'textarea'; placeholder?: string; skip?: boolean }> = {
     project_type: {
       text: "Hey! I'm here to help you find the perfect contractor. What type of project are you planning?",
     },
@@ -132,10 +136,24 @@ function getQuestionConfig(step: QuestionType, data: IntakeData) {
       skip: true,
     },
     contact_email: {
-      text: 'Email for project updates? (also optional)',
+      text: 'What\'s your email? We\'ll create an account so your project, payment, and contractor matches stay yours.',
       input: 'email',
       placeholder: 'you@example.com',
-      skip: true,
+    },
+    contact_email_password: {
+      text: `Looks like ${data.contact_email || 'that email'} already has a helpico account. Enter your password to sign in and continue.`,
+      input: 'password',
+      placeholder: 'Your password',
+    },
+    password_reset_code: {
+      text: `Sent a reset code to ${data.contact_email}. Enter it here to continue.${import.meta.env.DEV ? ' (Dev mode: type 0000.)' : ''}`,
+      input: 'text',
+      placeholder: '4-digit code',
+    },
+    password_reset_new_password: {
+      text: 'Pick a new password (at least 8 characters).',
+      input: 'password',
+      placeholder: 'New password',
     },
     notes: {
       text: 'Anything else contractors should know? (optional)',
@@ -172,10 +190,13 @@ const QUESTION_ORDER: QuestionType[] = [
 export default function ProjectIntake() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const authStore = useAuthStore()
   const chatEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const initRef = useRef(false)
+  // Transient reset-flow state, scoped to this component lifetime only.
+  const resetCodeRef = useRef<string>('')
 
   const [messages, setMessages] = useState<Message[]>([])
   const [currentStep, setCurrentStep] = useState<QuestionType>('project_type')
@@ -304,7 +325,36 @@ export default function ProjectIntake() {
     setSelectedMulti(prev => prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt])
   }
 
-  const handleInputSubmit = () => {
+  // "Use a different email" — jump back to the email step. We clear the
+  // stored email so the existence check re-runs for the next input.
+  const handleUseDifferentEmail = () => {
+    if (isTyping || isSubmitting) return
+    setInputValue('')
+    setData((d) => ({ ...d, contact_email: '' }))
+    setCurrentStep('contact_email')
+    showBotMessage("OK, what email should I use instead?")
+  }
+
+  // "Forgot password?" — kicks off the reset flow. In dev the code is
+  // always 0000; we still hit the backend so the server-side log fires
+  // (will send real email via SES later).
+  const handleForgotPassword = async () => {
+    if (isTyping || isSubmitting) return
+    if (!data.contact_email) return
+    try {
+      await authApi.requestPasswordReset(data.contact_email)
+    } catch {
+      // Non-fatal — endpoint is intentionally idempotent / silent.
+    }
+    setInputValue('')
+    setCurrentStep('password_reset_code')
+    showBotMessage(
+      `Sent a reset code to ${data.contact_email}. Enter it here to continue.` +
+        (import.meta.env.DEV ? ' (Dev mode: type 0000.)' : '')
+    )
+  }
+
+  const handleInputSubmit = async () => {
     if (isTyping || isSubmitting) return
     const config = getQuestionConfig(currentStep, data)
     const value = inputValue.trim()
@@ -321,8 +371,98 @@ export default function ProjectIntake() {
       showBotMessage("That doesn't look right. Please enter a 5-digit US zip code.")
       return
     }
-    if (currentStep === 'contact_email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-      showBotMessage("That doesn't look like a valid email. Try again or hit send to skip.")
+    if (currentStep === 'contact_email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      showBotMessage("That doesn't look like a valid email. Please try again.")
+      return
+    }
+
+    // Email step: check if the address already belongs to an account.
+    // If so, branch into the inline sign-in step instead of advancing.
+    if (currentStep === 'contact_email') {
+      const updatedData = { ...data, contact_email: value }
+      setData(updatedData)
+      addMessage('user', value)
+      setInputValue('')
+      // Read the live store state — the closure-captured `authStore` can
+      // be stale right after an inline login.
+      if (useAuthStore.getState().isAuthenticated) {
+        advanceToNextStep(updatedData)
+        return
+      }
+      try {
+        const res: any = await authApi.checkEmail(value)
+        if (res.data?.exists) {
+          setCurrentStep('contact_email_password')
+          showBotMessage(
+            `Looks like ${value} already has a helpico account. Enter your password to sign in and continue.`
+          )
+          return
+        }
+      } catch {
+        // fail-open: on network hiccup, treat as new and continue.
+      }
+      advanceToNextStep(updatedData)
+      return
+    }
+
+    // Inline password step for existing accounts.
+    // On success we skip the remaining optional questions (notes, confirm)
+    // and jump straight to creating the project + navigating to payment —
+    // returning users have already told us everything we need.
+    if (currentStep === 'contact_email_password') {
+      addMessage('user', '••••••••')
+      setInputValue('')
+      try {
+        await authStore.login(data.contact_email, value)
+        showBotMessage("Signed in successfully — taking you to payment.")
+        // Submit using whatever we've collected so far; `notes` stays empty.
+        await handleSubmit({ ...data }, { fromLogin: true })
+      } catch {
+        showBotMessage("Password doesn't match. Please try again.")
+      }
+      return
+    }
+
+    // Reset-flow: user typed the reset code.
+    if (currentStep === 'password_reset_code') {
+      addMessage('user', value)
+      setInputValue('')
+      // Keep the code in state so we can pair it with the new password
+      // on the next step. We stash it on `resetCode` via a ref so we don't
+      // have to grow IntakeData for a transient value.
+      resetCodeRef.current = value
+      setCurrentStep('password_reset_new_password')
+      showBotMessage('Pick a new password (at least 8 characters).')
+      return
+    }
+
+    // Reset-flow: user typed the new password. Submit to backend.
+    if (currentStep === 'password_reset_new_password') {
+      if (value.length < 8) {
+        showBotMessage('Password needs at least 8 characters. Try again.')
+        return
+      }
+      addMessage('user', '••••••••')
+      setInputValue('')
+      try {
+        await authApi.resetPassword({
+          email: data.contact_email,
+          code: resetCodeRef.current,
+          new_password: value,
+        })
+        // Refresh the store so subsequent decisions see the authed user.
+        await authStore.refreshMe()
+        showBotMessage("Password updated — taking you to payment.")
+        await handleSubmit({ ...data }, { fromLogin: true })
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail
+        if (detail === 'Invalid reset code') {
+          showBotMessage("That code didn't work. Try typing it again.")
+          setCurrentStep('password_reset_code')
+          return
+        }
+        showBotMessage(detail || "Couldn't reset password. Try again.")
+      }
       return
     }
 
@@ -330,7 +470,6 @@ export default function ProjectIntake() {
     switch (currentStep) {
       case 'zip_code': updatedData.zip_code = value; break
       case 'contact_name': updatedData.contact_name = value; break
-      case 'contact_email': updatedData.contact_email = value; break
       case 'notes': updatedData.notes = value; break
     }
     setData(updatedData)
@@ -339,13 +478,31 @@ export default function ProjectIntake() {
     advanceToNextStep(updatedData)
   }
 
-  const handleSubmit = async (finalData: IntakeData) => {
+  const handleSubmit = async (
+    finalData: IntakeData,
+    opts?: { fromLogin?: boolean }
+  ) => {
     setIsSubmitting(true)
     setError('')
-    addMessage('user', 'Find my contractors!')
-    showBotMessage('Searching for the best contractors... One moment!')
+    if (!opts?.fromLogin) {
+      addMessage('user', 'Find my contractors!')
+      showBotMessage('Setting up your account and project…')
+    }
 
     try {
+      // If the user isn't already signed in (new email path), auto-create
+      // their account from the intake details. Existing-email users signed
+      // in earlier via the inline password step.
+      // Read the live store state — the component-captured `authStore`
+      // object reflects render-time snapshot and can be stale immediately
+      // after `authStore.login(...)` resolves in the same tick.
+      if (!useAuthStore.getState().isAuthenticated) {
+        await authStore.ensureFromIntake(
+          finalData.contact_email,
+          finalData.contact_name || undefined
+        )
+      }
+
       const response = await projectsApi.create({
         project_type: finalData.project_type,
         zip_code: finalData.zip_code,
@@ -368,10 +525,20 @@ export default function ProjectIntake() {
         },
       })
       const project = (response as any).data
-      navigate(`/project/${project.id}/results`)
+      navigate(`/project/${project.id}/pay`)
     } catch (err: any) {
       setIsSubmitting(false)
-      setError(err.response?.data?.error?.message || 'Something went wrong.')
+      const detail = err?.response?.data?.detail
+      if (detail === 'needs_password') {
+        // Race: email became taken between check-email and submit. Send user
+        // back to the inline sign-in step.
+        setCurrentStep('contact_email_password')
+        showBotMessage(
+          `Looks like ${finalData.contact_email} already has a helpico account. Enter your password to sign in and continue.`
+        )
+        return
+      }
+      setError(detail || err?.response?.data?.error?.message || 'Something went wrong.')
       showBotMessage('Sorry, something went wrong. Please try again.')
     }
   }
@@ -553,24 +720,53 @@ export default function ProjectIntake() {
 
             {/* Text / email input */}
             {config.input && config.input !== 'textarea' && (
-              <div className="flex gap-2">
-                <input
-                  ref={inputRef}
-                  type={config.input}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
-                  placeholder={config.placeholder}
-                  className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[14px] text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
-                  autoComplete={currentStep === 'contact_email' ? 'email' : currentStep === 'contact_name' ? 'name' : 'off'}
-                />
-                <button
-                  onClick={handleInputSubmit}
-                  className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white hover:bg-primary/90 active:scale-[0.95] transition-all cursor-pointer flex-shrink-0"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
+              <>
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type={config.input}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleInputSubmit()}
+                    placeholder={config.placeholder}
+                    className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[14px] text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-colors"
+                    autoComplete={
+                      currentStep === 'contact_email' ? 'email'
+                      : currentStep === 'contact_name' ? 'name'
+                      : currentStep === 'contact_email_password' ? 'current-password'
+                      : currentStep === 'password_reset_new_password' ? 'new-password'
+                      : currentStep === 'password_reset_code' ? 'one-time-code'
+                      : 'off'
+                    }
+                  />
+                  <button
+                    onClick={handleInputSubmit}
+                    className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white hover:bg-primary/90 active:scale-[0.95] transition-all cursor-pointer flex-shrink-0"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Inline helpers shown only on the existing-account password step. */}
+                {currentStep === 'contact_email_password' && (
+                  <div className="flex items-center justify-between gap-3 pt-1 text-[12px]">
+                    <button
+                      type="button"
+                      onClick={handleUseDifferentEmail}
+                      className="text-neutral-400 hover:text-neutral-200 transition-colors underline underline-offset-2 cursor-pointer"
+                    >
+                      Use a different email
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleForgotPassword}
+                      className="text-primary hover:text-primary/80 transition-colors underline underline-offset-2 cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Textarea */}

@@ -4,6 +4,9 @@ import Layout from '@/components/layout/Layout'
 import Home from '@/pages/Home'
 import ProjectIntake from '@/pages/ProjectIntake'
 import ContractorResults from '@/pages/ContractorResults'
+import ProjectPayment from '@/pages/ProjectPayment'
+import PaymentReturn from '@/pages/PaymentReturn'
+import ClaimPassword from '@/pages/ClaimPassword'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import Dashboard from '@/pages/Dashboard'
@@ -19,8 +22,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Full-screen chat — no header/footer */}
+        {/* Full-screen pages — no header/footer */}
         <Route path="/project/new" element={<ProjectIntake />} />
+        <Route path="/project/:id/pay" element={<ProjectPayment />} />
+        <Route path="/project/:id/payment/return" element={<PaymentReturn />} />
+        <Route path="/project/:id/claim" element={<ClaimPassword />} />
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
           <Route path="/project/:id/results" element={<ContractorResults />} />

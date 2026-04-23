@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_RETURN_URL: str = (
+        "http://127.0.0.1/project/{PROJECT_ID}/payment/return?session_id={CHECKOUT_SESSION_ID}"
+    )
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     DEBUG: bool = False
     APP_NAME: str = "AI Home Renovation Platform"

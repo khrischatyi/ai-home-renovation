@@ -222,9 +222,101 @@ See `.env` for all required variables. Key settings:
 - `DATABASE_URL_SYNC` - Sync PostgreSQL connection (for scripts like seed)
 - `REDIS_URL` - Redis for Celery task queue
 - `SECRET_KEY` - JWT signing key
-- `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` - Payment processing
+- `STRIPE_SECRET_KEY` / `STRIPE_PUBLISHABLE_KEY` / `STRIPE_WEBHOOK_SECRET` - Payment processing
+- `STRIPE_SUCCESS_RETURN_URL` - Embedded Checkout return URL (literal `{PROJECT_ID}` + `{CHECKOUT_SESSION_ID}` placeholders; `{CHECKOUT_SESSION_ID}` is expanded by Stripe, `{PROJECT_ID}` by our service)
 - `CORS_ORIGINS` - Allowed frontend origins
 - `DEBUG` - Enable debug mode and SQL echo
+
+## Stripe Payment Flow (test payment at /project/new)
+
+### End-to-end flow
+1. Homeowner fills the intake chat at `http://127.0.0.1/project/new`. Email is **required** — the account is created from this info.
+   - On the email step, frontend calls `POST /api/v1/auth/check-email`. If the address already has an account, the chat branches into an inline password prompt → `/auth/login`.
+   - If new, after the final confirm the frontend calls `POST /api/v1/auth/ensure-from-intake` which creates the user with a throwaway password (`password_set=false`) and sets auth cookies.
+2. On submit, frontend calls `POST /api/v1/projects` → navigates to `/project/:id/pay`. Because the user is now authed, the project (and subsequent payment) carries their `user_id`.
+3. `ProjectPayment.tsx` calls `POST /api/v1/payments/checkout-session` with `{ project_id, payment_type: "test_payment" }`.
+4. Backend's `PaymentService.create_checkout_session`:
+   - Validates the project exists.
+   - Creates a `payments` row with `status=pending`.
+   - Calls `stripe.checkout.Session.create(ui_mode="embedded_page", mode="payment", ...)` — note: the old `ui_mode="embedded"` value is rejected by the current API; always use `embedded_page`.
+   - Persists `stripe_checkout_session_id`.
+   - Returns `{ client_secret, publishable_key, payment_id, amount_cents, currency }`.
+5. Frontend mounts `<EmbeddedCheckoutProvider options={{ clientSecret }}><EmbeddedCheckout /></EmbeddedCheckoutProvider>` from `@stripe/react-stripe-js`.
+6. User submits card → Stripe charges → redirects to `return_url`:
+   `http://127.0.0.1/project/{PROJECT_ID}/payment/return?session_id={CHECKOUT_SESSION_ID}`.
+7. `PaymentReturn.tsx` polls `GET /api/v1/payments/session/:checkout_session_id` every 1s for up to 15s, then renders:
+   - ✅ `status=completed` → success UI → after 2s:
+     - If `current_user.password_set === false` → `/project/:id/claim` (ClaimPassword page, `POST /auth/claim-password` → flips `password_set=true`).
+     - Otherwise → `/project/:id/results`.
+   - ❌ `status=failed` → failure UI with "Try again" → back to `/project/:id/pay`.
+   - ⏳ stuck pending → timeout UI with manual refresh.
+
+### Status source of truth
+- **Primary**: Stripe webhook `POST /api/v1/payments/webhook`. Signature is verified with `STRIPE_WEBHOOK_SECRET`. Handled events:
+  - `checkout.session.completed` (only flips to `completed` if `payment_status=="paid"`).
+  - `checkout.session.async_payment_failed`, `checkout.session.expired` → `failed`.
+  - `payment_intent.payment_failed` → `failed`, with `last_payment_error.message` stored in `failure_reason`.
+- **Self-healing fallback**: `GET /payments/session/:id` on a still-pending row calls `stripe.checkout.Session.retrieve()` and syncs the DB. This is what allows local testing without running `stripe listen`. Webhook remains authoritative when it arrives.
+
+### Architecture
+- `app/domain/payments/stripe_client.py` — thin wrapper around the Stripe SDK (`create_checkout_session`, `retrieve_session`, `construct_webhook_event`). Keeps `PaymentService` mockable.
+- `app/domain/payments/service.py` — `PaymentService` with DB + Stripe orchestration and idempotent webhook handlers.
+- `app/domain/payments/repository.py` — `PaymentRepository` with `get_by_stripe_session_id`, `get_by_stripe_intent_id`, `update_status`.
+- `app/domain/payments/router.py` — FastAPI routes.
+- Always use the service+repository pattern when adding new flows (subscriptions, other payment_types).
+
+### Stripe Python SDK gotchas
+- Responses are `StripeObject`, not `dict`. **Don't call `.get()` on them** — use attribute access (`session.status`) or `getattr(session, "status", None)`. Index access (`session["status"]`) works too.
+- Our webhook handlers use `getattr` throughout to tolerate missing fields without blowing up.
+
+### Pricing
+Defined in `app/domain/payments/service.py::PRICING` (in cents):
+- `test_payment`: 1999 (**$19.99** — the amount used by the /project/new test flow)
+- `design_session`: 14900 ($149)
+- `concierge_vetting`: 24900 ($249)
+- `concierge_full`: 49900 ($499)
+- `concierge_bundle`: 59900 ($599)
+
+### Running it locally
+```bash
+make up                # boots docker stack + opens Chrome at /project/new
+# or manually:
+make dev-d             # stack only
+make browser           # open Chrome at http://127.0.0.1/project/new
+make stripe-listen     # (separate terminal) forward Stripe webhooks
+                       # copy the printed whsec_… into .env and `make restart service=backend`
+make stripe-check      # container + /health status
+```
+
+### Test cards
+| Card | Outcome |
+|---|---|
+| `4242 4242 4242 4242` | ✅ success (any future expiry, any CVC, any ZIP) |
+| `4000 0000 0000 0002` | ❌ generic decline |
+| `4000 0000 0000 9995` | ❌ insufficient funds |
+
+### Chrome DevTools MCP
+The `chrome-devtools` MCP needs Chrome running with `--remote-debugging-port=9222`. Start it with:
+```bash
+open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-devtools-profile http://127.0.0.1/project/new
+```
+
+### Database
+`payments` table columns relevant to Stripe:
+- `stripe_checkout_session_id` (indexed) — `cs_test_…`
+- `stripe_payment_intent_id` — `pi_…`
+- `status` — `pending | completed | failed`
+- `failure_reason` — human-readable message, copied from `payment_intent.last_payment_error.message` when available
+- `session_id` — anonymous session tracker (inherited from `projects.session_id`)
+- `user_id` — **nullable** (anonymous users can pay from /project/new)
+- `currency` — defaults to `usd`
+
+### Alembic note
+The `versions/` directory was empty at the start of this work. Clean baseline + Stripe migration:
+- `0001_baseline.py` — no-op, re-anchors the revision chain.
+- `0002_payments_stripe_checkout.py` — adds Stripe Checkout columns + nullable `user_id`.
+
+If `alembic upgrade head` fails with `Can't locate revision identified by '<old_hash>'`, clear the orphaned pointer with `TRUNCATE alembic_version;` then `alembic stamp 0001_baseline && alembic upgrade head`.
 
 ## Design System
 - **Style**: Exaggerated minimalism, modern teal/orange

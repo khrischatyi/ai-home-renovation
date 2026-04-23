@@ -82,7 +82,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.prod
     volumes:
-      - frontend_dist:/dist
+      - frontend_dist:/srv/frontend
     command: ["sh", "-c", "cp -r /srv/frontend/* /dist/ && echo 'Frontend deployed' && tail -f /dev/null"]
     restart: unless-stopped
 
@@ -92,6 +92,7 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile
+      - frontend_dist:/srv/frontend:ro
       - caddy_data:/data
       - caddy_config:/config
       - frontend_dist:/srv/frontend:ro
@@ -106,6 +107,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  frontend_dist:
   caddy_data:
   caddy_config:
   frontend_dist:

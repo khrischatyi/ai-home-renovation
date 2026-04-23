@@ -16,9 +16,14 @@ class Payment(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
         index=True,
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -26,12 +31,22 @@ class Payment(Base):
         nullable=False,
         index=True,
     )
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     amount_cents: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(
+        String(3), nullable=False, default="usd", server_default=text("'usd'")
+    )
     payment_type: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="pending", server_default=text("'pending'")
     )
+    failure_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

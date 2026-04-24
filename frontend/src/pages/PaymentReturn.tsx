@@ -84,10 +84,14 @@ export default function PaymentReturn() {
       await refreshMe()
       if (cancelled) return
       const current = useAuthStore.getState().user
+      const purchased = payment?.payment_type
+      const resultsUrl = purchased
+        ? `/project/${projectId}/results?purchased=${purchased}`
+        : `/project/${projectId}/results`
       if (current && !current.password_set) {
         navigate(`/project/${projectId}/claim`, { replace: true })
       } else {
-        navigate(`/project/${projectId}/results`, { replace: true })
+        navigate(resultsUrl, { replace: true })
       }
     }, SUCCESS_REDIRECT_DELAY_MS)
 
@@ -95,7 +99,7 @@ export default function PaymentReturn() {
       cancelled = true
       clearTimeout(t)
     }
-  }, [phase, projectId, navigate, refreshMe])
+  }, [phase, projectId, navigate, refreshMe, payment?.payment_type])
 
   return (
     <div className="min-h-screen bg-[#0c0f14] flex flex-col">

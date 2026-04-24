@@ -525,7 +525,7 @@ export default function ProjectIntake() {
         },
       })
       const project = (response as any).data
-      navigate(`/project/${project.id}/pay`)
+      navigate(`/project/${project.id}/results`)
     } catch (err: any) {
       setIsSubmitting(false)
       const detail = err?.response?.data?.detail

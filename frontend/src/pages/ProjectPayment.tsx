@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { loadStripe, type Stripe } from '@stripe/stripe-js'
 import {
   EmbeddedCheckoutProvider,
@@ -17,18 +17,44 @@ function stripePromise(pk: string) {
   return stripePromiseCache.get(pk)!
 }
 
+const PAYMENT_TYPE_COPY: Record<string, { title: string; tagline: string }> = {
+  test_payment: {
+    title: 'Unlock your contractor matches',
+    tagline: 'One-time payment to view your top ranked contractors.',
+  },
+  concierge_full: {
+    title: 'Negotiate with contractors',
+    tagline: 'Our AI concierge reaches out, coordinates visits, and handles back-and-forth.',
+  },
+  concierge_vetting: {
+    title: 'Get the best price',
+    tagline: 'We vet contractors and negotiate the lowest price on your behalf.',
+  },
+  design_session: {
+    title: 'AI design session',
+    tagline: 'Explore design options and materials with a guided AI consultation.',
+  },
+  concierge_bundle: {
+    title: 'Full concierge bundle',
+    tagline: 'Vetting, negotiation, and project coordination — everything in one.',
+  },
+}
+
 export default function ProjectPayment() {
   const { id: projectId } = useParams<{ id: string }>()
+  const [params] = useSearchParams()
+  const paymentType = params.get('type') || 'test_payment'
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [publishableKey, setPublishableKey] = useState<string | null>(null)
   const [amountCents, setAmountCents] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const copy = PAYMENT_TYPE_COPY[paymentType] || PAYMENT_TYPE_COPY.test_payment
 
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
     paymentsApi
-      .createCheckoutSession(projectId, 'test_payment')
+      .createCheckoutSession(projectId, paymentType)
       .then((res) => {
         if (cancelled) return
         setClientSecret(res.data.client_secret)
@@ -47,7 +73,7 @@ export default function ProjectPayment() {
     return () => {
       cancelled = true
     }
-  }, [projectId])
+  }, [projectId, paymentType])
 
   const options = useMemo(
     () => (clientSecret ? { clientSecret } : undefined),
@@ -79,16 +105,15 @@ export default function ProjectPayment() {
         <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
           <div className="space-y-2">
             <h1 className="font-headline font-bold text-white text-2xl">
-              Unlock your contractor matches
+              {copy.title}
             </h1>
             <p className="text-neutral-400 text-sm">
-              One-time payment of{' '}
-              <span className="text-white font-semibold">
-                {amountCents != null
-                  ? `$${(amountCents / 100).toFixed(2)}`
-                  : '$19.99'}
-              </span>{' '}
-              to view your top ranked contractors.
+              {copy.tagline}{' '}
+              {amountCents != null && (
+                <span className="text-white font-semibold">
+                  ${(amountCents / 100).toFixed(2)}
+                </span>
+              )}
             </p>
             <div className="flex items-center gap-2 text-neutral-500 text-xs">
               <ShieldCheck className="w-3.5 h-3.5" />

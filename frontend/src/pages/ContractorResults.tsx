@@ -1,11 +1,49 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Shield, CheckCircle, Clock, Phone, Mail, Globe, ArrowRight } from 'lucide-react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Shield, CheckCircle, Clock, Phone, Mail, Globe, ArrowRight, Handshake, TrendingDown } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import { Card, CardContent } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { ScoreBadge } from '@/components/ui/ScoreBadge'
 import type { Project, Contractor } from '@/api/projects'
+
+type UpgradeOption = {
+  paymentType: 'concierge_full' | 'concierge_vetting'
+  title: string
+  price: string
+  description: string
+  bullets: string[]
+  icon: typeof Handshake
+}
+
+const UPGRADE_OPTIONS: UpgradeOption[] = [
+  {
+    paymentType: 'concierge_full',
+    title: 'Negotiate with contractors',
+    price: '$499',
+    description:
+      'Our AI concierge reaches out to your top matches, coordinates visits, and handles the back-and-forth for you.',
+    bullets: [
+      'Automated outreach to top 5 contractors',
+      'Visit scheduling + follow-ups',
+      'Quote comparison side-by-side',
+    ],
+    icon: Handshake,
+  },
+  {
+    paymentType: 'concierge_vetting',
+    title: 'Get the best price',
+    price: '$249',
+    description:
+      'We vet each contractor and negotiate on your behalf to cut the quote to the lowest fair price.',
+    bullets: [
+      'License + insurance re-verification',
+      'AI price-negotiation rounds',
+      'Final price report delivered to you',
+    ],
+    icon: TrendingDown,
+  },
+]
 
 // Mock data for now - will connect to API when backend is running
 const mockProject: Project = {
@@ -56,7 +94,9 @@ const mockContractors: Contractor[] = [
 ]
 
 export default function ContractorResults() {
-  const { id: _id } = useParams()
+  const { id: projectId } = useParams()
+  const [params] = useSearchParams()
+  const purchased = params.get('purchased')
   const [project] = useState<Project>(mockProject)
   const [contractors] = useState<Contractor[]>(mockContractors)
 
@@ -91,6 +131,17 @@ export default function ContractorResults() {
           </span>
         </div>
       </div>
+
+      {purchased && (
+        <div className="bg-emerald-500/15 border-b border-emerald-500/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm text-emerald-200">
+              Payment confirmed — our team is getting started. You'll get updates by email.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Contractor Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -187,6 +238,67 @@ export default function ContractorResults() {
                 </Button>
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* Upgrade / add-on options */}
+        <div className="mt-12">
+          <div className="mb-6">
+            <h2 className="font-headline font-bold text-white text-2xl mb-1">
+              Buy additional options
+            </h2>
+            <p className="text-neutral-400 text-sm">
+              Let our AI do the heavy lifting — reach out, negotiate, and close the best deal for you.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {UPGRADE_OPTIONS.map((opt) => {
+              const Icon = opt.icon
+              const isPurchased = purchased === opt.paymentType
+              return (
+                <Card
+                  key={opt.paymentType}
+                  className={`transition-all ${isPurchased ? 'border-emerald-500/40 bg-emerald-500/5' : 'hover:border-primary/30'}`}
+                >
+                  <CardContent>
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <h3 className="font-headline font-bold text-white text-lg">{opt.title}</h3>
+                          <span className="text-primary font-bold text-lg">{opt.price}</span>
+                        </div>
+                        <p className="text-sm text-neutral-400 mb-3">{opt.description}</p>
+                        <ul className="space-y-1.5 mb-4">
+                          {opt.bullets.map((b) => (
+                            <li key={b} className="flex items-start gap-2 text-sm text-neutral-300">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {isPurchased ? (
+                          <Badge variant="success">
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Purchased
+                          </Badge>
+                        ) : projectId ? (
+                          <Link
+                            to={`/project/${projectId}/pay?type=${opt.paymentType}`}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                          >
+                            Buy {opt.title.toLowerCase()}
+                            <ArrowRight className="w-4 h-4" />
+                          </Link>
+                        ) : null}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </div>
       </div>
